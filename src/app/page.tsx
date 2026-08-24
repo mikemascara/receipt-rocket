@@ -40,12 +40,12 @@ export default function Home() {
     setPreview(url);
 
     try {
-      const base64 = await fileToBase64(file);
+      const { base64, mimeType } = await fileToBase64(file);
 
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64 }),
+        body: JSON.stringify({ image: base64, mimeType }),
       });
 
       if (!res.ok) {
@@ -180,7 +180,7 @@ export default function Home() {
             <input
               ref={cameraRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/*"
               capture="environment"
               className="hidden"
               onChange={onFileChange}
@@ -188,7 +188,7 @@ export default function Home() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/*"
               className="hidden"
               onChange={onFileChange}
             />
@@ -212,13 +212,15 @@ export default function Home() {
   );
 }
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      resolve(base64);
+      const [header, base64] = result.split(",");
+      const mimeMatch = header?.match(/data:([^;]+);/);
+      const mimeType = mimeMatch?.[1] || file.type || "image/jpeg";
+      resolve({ base64, mimeType });
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);

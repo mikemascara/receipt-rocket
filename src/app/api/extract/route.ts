@@ -2,17 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Receipt extraction via Grok vision.
- * Expects { image: base64String } in the body.
+ * Expects { image: base64String, mimeType?: string } in the body.
  * Returns { merchant, date, total, memo }
  *
  * Set XAI_API_KEY in your Vercel environment variables.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { image } = await req.json();
+    const body = await req.json();
+    const image = body?.image;
+    let mimeType = typeof body?.mimeType === "string" ? body.mimeType : "image/jpeg";
 
     if (!image || typeof image !== "string") {
       return NextResponse.json({ error: "Missing image" }, { status: 400 });
+    }
+
+    // xAI vision supports jpeg/jpg and png only
+    if (mimeType === "image/jpg") mimeType = "image/jpeg";
+    if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+      return NextResponse.json(
+        {
+          error:
+            "Unsupported image type. Please use a JPEG or PNG photo (not HEIC). On iPhone: Settings → Camera → Formats → Most Compatible.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Rough size guard (~15MB base64 ≈ ~11MB binary) to avoid oversized payloads
+    if (image.length > 15_000_000) {
+      return NextResponse.json(
+        { error: "Photo is too large. Try a closer crop or lower resolution." },
+        { status: 400 }
+      );
     }
 
     const apiKey = process.env.XAI_API_KEY;
@@ -37,7 +59,7 @@ export async function POST(req: NextRequest) {
 
 Rules:
 - total must be a number (the final amount paid, including tax)
-- date should be ISO format. If unclear, use today's date
+- date should be ISO format YYYY-MM-DD. If unclear, use today's date
 - merchant should be the clean business name
 - If you cannot determine a field, use reasonable defaults`;
 
@@ -48,7 +70,7 @@ Rules:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-2-vision-1212",
+        model: "grok-4.6",
         messages: [
           {
             role: "user",
@@ -57,24 +79,37 @@ Rules:
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/jpeg;base64,${image}`,
+                  url: `data:${mimeType};base64,${image}`,
+                  detail: "high",
                 },
               },
             ],
           },
         ],
-        temperature: 0.1,
-        max_tokens: 300,
+        max_tokens: 400,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
       console.error("Grok API error:", response.status, errText);
-      return NextResponse.json(
-        { error: `Vision API error (${response.status})` },
-        { status: 502 }
-      );
+
+      let detail = `Vision API error (${response.status})`;
+      try {
+        const errJson = JSON.parse(errText);
+        const msg =
+          errJson?.error?.message ||
+          errJson?.message ||
+          errJson?.error ||
+          null;
+        if (typeof msg === "string" && msg.length < 200) {
+          detail = msg;
+        }
+      } catch {
+        // keep generic detail
+      }
+
+      return NextResponse.json({ error: detail }, { status: 502 });
     }
 
     const data = await response.json();
