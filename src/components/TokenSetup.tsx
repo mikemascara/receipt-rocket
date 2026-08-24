@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { setYnabToken } from "@/lib/storage";
 import { fetchBudgets } from "@/lib/ynab";
-import { ExternalLink, KeyRound, CheckCircle2, AlertCircle } from "lucide-react";
+import { ExternalLink, KeyRound, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 
 type Props = {
   onComplete: () => void;
@@ -33,15 +33,30 @@ export default function TokenSetup({ onComplete }: Props) {
   return (
     <div className="min-h-dvh flex flex-col px-5 pt-12 pb-8 max-w-md mx-auto">
       <div className="flex-1">
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="w-14 h-14 rounded-2xl bg-orange-500/20 flex items-center justify-center mb-5">
             <KeyRound className="w-7 h-7 text-orange-400" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight mb-2">Connect your YNAB</h1>
           <p className="text-zinc-400 text-[15px] leading-relaxed">
             Receipt Rocket needs a Personal Access Token so it can send transactions into your budget.
-            Your token never leaves your device.
           </p>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-emerald-300 text-[15px]">Your token never leaves this device</p>
+              <ul className="mt-2 space-y-1.5 text-[13px] text-zinc-300 leading-snug">
+                <li>Stored only in this browser — not on our servers, not in the cloud.</li>
+                <li>Never sent to Grok. Receipt photos go to Grok; your YNAB token does not.</li>
+                <li>When you send a transaction, this device talks to YNAB directly.</li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4 mb-8">
@@ -92,6 +107,9 @@ export default function TokenSetup({ onComplete }: Props) {
             autoComplete="off"
             spellCheck={false}
           />
+          <p className="text-xs text-zinc-500 leading-relaxed">
+            Saved only on this device. Disconnect anytime from the settings icon.
+          </p>
 
           {status === "error" && (
             <div className="flex items-start gap-2 text-red-400 text-sm">
@@ -114,7 +132,7 @@ export default function TokenSetup({ onComplete }: Props) {
         disabled={!token.trim() || status === "checking" || status === "success"}
         className="w-full mt-8 bg-orange-500 hover:bg-orange-400 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-semibold py-4 rounded-2xl transition-colors text-[16px]"
       >
-        {status === "checking" ? "Checking token…" : status === "success" ? "Connected!" : "Save & Continue"}
+        {status === "checking" ? "Checking token…" : status === "success" ? "Connected!" : "Save on this device"}
       </button>
     </div>
   );

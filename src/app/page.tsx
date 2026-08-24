@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { getYnabToken, clearYnabToken } from "@/lib/storage";
 import TokenSetup from "@/components/TokenSetup";
 import ReviewScreen, { type ExtractedReceipt } from "@/components/ReviewScreen";
-import { Camera, Upload, Settings, Rocket, CheckCircle2, Loader2 } from "lucide-react";
+import { Camera, Upload, Settings, Rocket, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 
 type Screen = "home" | "setup" | "review" | "success";
 
@@ -200,8 +200,15 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="text-center text-zinc-600 text-xs pb-6 safe-bottom">
-        Your token stays on this device · Powered by Grok
+      <footer className="px-5 pb-6 safe-bottom">
+        <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3">
+          <ShieldCheck className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+          <p className="text-[12px] text-zinc-300 leading-snug">
+            <span className="font-semibold text-emerald-300">YNAB token stays on this device.</span>{" "}
+            It is never uploaded to Receipt Rocket or Grok.
+          </p>
+        </div>
+        {hasToken ? null : null}
       </footer>
     </div>
   );
