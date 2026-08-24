@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Receipt Rocket",
   description: "Snap a receipt → review → send to YNAB. Fast, simple, and private.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -28,7 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
       <body className="antialiased bg-zinc-950 text-zinc-50 min-h-dvh">
         {children}

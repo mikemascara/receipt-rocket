@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512" role="img" aria-label="Receipt Rocket">
+  <rect width="512" height="512" rx="112" fill="#f97316"/>
+  <g fill="#ffffff" transform="translate(256 268)">
+    <path d="M0 -160 C28 -160 48 -40 48 20 L48 70 L-48 70 L-48 20 C-48 -40 -28 -160 0 -160 Z"/>
+    <path d="M-48 20 L-110 95 L-48 78 Z"/>
+    <path d="M48 20 L110 95 L48 78 Z"/>
+    <rect x="-36" y="70" width="72" height="14" rx="4"/>
+    <path d="M-22 84 L0 150 L22 84 Z"/>
+  </g>
+</svg>
