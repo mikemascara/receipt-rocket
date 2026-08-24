@@ -21,6 +21,10 @@ export type YnabCategory = {
   deleted: boolean;
 };
 
+function isArchivedBudgetName(name: string): boolean {
+  return /\barchived\b/i.test(name);
+}
+
 export async function fetchBudgets(token: string): Promise<YnabBudget[]> {
   const res = await fetch(`${YNAB_BASE}/budgets`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -30,7 +34,14 @@ export async function fetchBudgets(token: string): Promise<YnabBudget[]> {
     throw new Error(err?.error?.detail || `YNAB error ${res.status}`);
   }
   const data = await res.json();
-  return data.data.budgets.map((b: any) => ({ id: b.id, name: b.name }));
+  const budgets: YnabBudget[] = data.data.budgets.map((b: any) => ({
+    id: b.id,
+    name: b.name,
+  }));
+
+  // Prefer active budgets; keep archived only if nothing else exists
+  const active = budgets.filter((b) => !isArchivedBudgetName(b.name));
+  return active.length > 0 ? active : budgets;
 }
 
 export async function fetchAccounts(token: string, budgetId: string): Promise<YnabAccount[]> {

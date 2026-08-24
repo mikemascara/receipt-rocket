@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { getYnabToken, getBudgetId, setBudgetId } from "@/lib/storage";
 import {
   fetchBudgets,
@@ -12,7 +12,7 @@ import {
   type YnabAccount,
   type YnabCategory,
 } from "@/lib/ynab";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Search, X } from "lucide-react";
 
 export type ExtractedReceipt = {
   merchant: string;
@@ -27,6 +27,108 @@ type Props = {
   onBack: () => void;
   onSuccess: () => void;
 };
+
+type SearchOption = { id: string; label: string };
+
+function SearchSelect({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  emptyOption,
+}: {
+  label: string;
+  options: SearchOption[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder: string;
+  emptyOption?: SearchOption;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const selected =
+    options.find((o) => o.id === value) ||
+    (emptyOption && value === emptyOption.id ? emptyOption : undefined);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = emptyOption ? [emptyOption, ...options] : options;
+    if (!q) return list;
+    return list.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query, emptyOption]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <label className="block text-xs font-medium text-zinc-400 mb-1.5">{label}</label>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((v) => !v);
+          setQuery("");
+        }}
+        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+      >
+        <span className={selected ? "text-zinc-100 truncate" : "text-zinc-500 truncate"}>
+          {selected?.label || placeholder}
+        </span>
+        <Search className="w-4 h-4 text-zinc-500 shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800">
+            <Search className="w-4 h-4 text-zinc-500 shrink-0" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Type to search…"
+              className="w-full bg-transparent text-[15px] outline-none placeholder:text-zinc-600 py-1"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")} className="p-1 text-zinc-500">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-4 py-3 text-sm text-zinc-500">No matches</p>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o.id || "empty"}
+                  type="button"
+                  onClick={() => {
+                    onChange(o.id);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                  className={`w-full text-left px-4 py-3 text-[15px] hover:bg-zinc-800 ${
+                    o.id === value ? "text-orange-400" : "text-zinc-100"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess }: Props) {
   const [merchant, setMerchant] = useState(receipt.merchant);
@@ -55,7 +157,8 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         setBudgets(b);
 
         const savedBudget = getBudgetId();
-        const budgetId = savedBudget && b.find((x) => x.id === savedBudget) ? savedBudget : b[0]?.id;
+        const budgetId =
+          savedBudget && b.find((x) => x.id === savedBudget) ? savedBudget : b[0]?.id;
         if (budgetId) {
           setSelectedBudget(budgetId);
           setBudgetId(budgetId);
@@ -125,6 +228,16 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
     }
   }
 
+  const accountOptions: SearchOption[] = accounts.map((a) => ({
+    id: a.id,
+    label: a.name,
+  }));
+
+  const categoryOptions: SearchOption[] = categories.map((c) => ({
+    id: c.id,
+    label: `${c.category_group_name} → ${c.name}`,
+  }));
+
   if (loading) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
@@ -145,7 +258,11 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-5">
         {imagePreview && (
           <div className="rounded-xl overflow-hidden border border-zinc-800">
-            <img src={imagePreview} alt="Receipt" className="w-full max-h-48 object-contain bg-zinc-900" />
+            <img
+              src={imagePreview}
+              alt="Receipt"
+              className="w-full max-h-48 object-contain bg-zinc-900"
+            />
           </div>
         )}
 
@@ -154,59 +271,49 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
           <input
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Amount ($)</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            />
-          </div>
+        {/* Stacked so iOS date picker never overlaps amount */}
+        <div>
+          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+          />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Account</label>
-          <select
-            value={selectedAccount}
-            onChange={(e) => setSelectedAccount(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
+          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Amount ($)</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+          />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Category</label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-          >
-            <option value="">— Uncategorized —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.category_group_name} → {c.name}</option>
-            ))}
-          </select>
-        </div>
+        <SearchSelect
+          label="Account"
+          options={accountOptions}
+          value={selectedAccount}
+          onChange={setSelectedAccount}
+          placeholder="Choose account"
+        />
+
+        <SearchSelect
+          label="Category"
+          options={categoryOptions}
+          value={selectedCategory}
+          onChange={setSelectedCategory}
+          placeholder="Choose category"
+          emptyOption={{ id: "", label: "— Uncategorized —" }}
+        />
 
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">Memo (optional)</label>
@@ -214,24 +321,25 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
             placeholder="e.g. Costco run"
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
         {budgets.length > 1 && (
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Budget</label>
-            <select
-              value={selectedBudget}
-              onChange={(e) => handleBudgetChange(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            >
-              {budgets.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </div>
+          <SearchSelect
+            label="Budget"
+            options={budgets.map((b) => ({ id: b.id, label: b.name }))}
+            value={selectedBudget}
+            onChange={handleBudgetChange}
+            placeholder="Choose budget"
+          />
         )}
+
+        <p className="text-[11px] text-zinc-600 leading-snug">
+          Receipt photo is kept on this device for review only. YNAB’s public API does not yet allow
+          attaching photos to transactions — you can still add the photo inside the YNAB app after
+          sending.
+        </p>
 
         {error && (
           <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
@@ -247,9 +355,13 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
           className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-semibold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 text-[16px]"
         >
           {submitting ? (
-            <><Loader2 className="w-5 h-5 animate-spin" /> Sending…</>
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" /> Sending…
+            </>
           ) : (
-            <><Check className="w-5 h-5" /> Send to YNAB</>
+            <>
+              <Check className="w-5 h-5" /> Send to YNAB
+            </>
           )}
         </button>
       </div>
