@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         merchant: "Sample Store",
         date: new Date().toISOString().slice(0, 10),
         total: 42.5,
-        memo: "Mock extraction (set XAI_API_KEY)",
+        memo: "",
       });
     }
 
@@ -54,14 +54,14 @@ export async function POST(req: NextRequest) {
   "merchant": "store or restaurant name",
   "date": "YYYY-MM-DD",
   "total": 12.34,
-  "memo": "optional short note"
+  "memo": ""
 }
 
 Rules:
 - total must be a number (the final amount paid, including tax)
-- date should be ISO format YYYY-MM-DD. If unclear, use today's date
-- merchant should be the clean business name
-- If you cannot determine a field, use reasonable defaults`;
+- date must be ISO format YYYY-MM-DD. If unclear, use today's date
+- merchant should be the clean business name only
+- memo must be an empty string "". Do NOT list line items. Do NOT summarize products. Leave memo blank always.`;
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -86,7 +86,7 @@ Rules:
             ],
           },
         ],
-        max_tokens: 400,
+        max_tokens: 300,
       }),
     });
 
@@ -127,11 +127,12 @@ Rules:
       );
     }
 
+    // Always blank memo unless user types one on the review screen
     return NextResponse.json({
       merchant: String(parsed.merchant || "Unknown"),
       date: String(parsed.date || new Date().toISOString().slice(0, 10)),
       total: Number(parsed.total) || 0,
-      memo: parsed.memo ? String(parsed.memo) : "",
+      memo: "",
     });
   } catch (err: any) {
     console.error(err);

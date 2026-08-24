@@ -134,7 +134,8 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
   const [merchant, setMerchant] = useState(receipt.merchant);
   const [date, setDate] = useState(receipt.date);
   const [amount, setAmount] = useState(receipt.total.toFixed(2));
-  const [memo, setMemo] = useState(receipt.memo || "");
+  // Start blank — user adds a note only if they want one
+  const [memo, setMemo] = useState("");
 
   const [budgets, setBudgets] = useState<YnabBudget[]>([]);
   const [accounts, setAccounts] = useState<YnabAccount[]>([]);
@@ -210,13 +211,17 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
       const dollars = parseFloat(amount);
       if (isNaN(dollars) || dollars <= 0) throw new Error("Enter a valid amount");
 
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        throw new Error("Date must be YYYY-MM-DD (example: 2026-08-24)");
+      }
+
       await createTransaction(token, selectedBudget, {
         account_id: selectedAccount,
         date,
         amount: toMilliunits(-dollars),
         payee_name: merchant || undefined,
         category_id: selectedCategory || undefined,
-        memo: memo || undefined,
+        memo: memo.trim() || undefined,
         cleared: "uncleared",
         approved: true,
       });
@@ -247,7 +252,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
   }
 
   return (
-    <div className="min-h-dvh flex flex-col max-w-md mx-auto">
+    <div className="min-h-dvh flex flex-col max-w-md mx-auto overflow-x-hidden">
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800">
           <ArrowLeft className="w-5 h-5" />
@@ -255,7 +260,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         <h1 className="text-lg font-semibold">Review & Send</h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6 space-y-5">
         {imagePreview && (
           <div className="rounded-xl overflow-hidden border border-zinc-800">
             <img
@@ -271,30 +276,32 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
           <input
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
-            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
-        {/* Stacked so iOS date picker never overlaps amount */}
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date</label>
+          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date (YYYY-MM-DD)</label>
           <input
-            type="date"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="2026-08-24"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">Amount ($)</label>
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
-            step="0.01"
+            autoComplete="off"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
@@ -316,12 +323,14 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         />
 
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Memo (optional)</label>
+          <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+            Memo (optional — leave blank if you don&apos;t need one)
+          </label>
           <input
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="e.g. Costco run"
-            className="w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            placeholder="e.g. lunch with Amy"
+            className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
