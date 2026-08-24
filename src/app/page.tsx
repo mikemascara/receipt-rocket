@@ -196,14 +196,17 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="px-5 pb-6 safe-bottom">
+      <footer className="px-5 pb-6 safe-bottom space-y-2">
         <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3">
           <ShieldCheck className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
           <p className="text-[12px] text-zinc-300 leading-snug">
             <span className="font-semibold text-emerald-300">YNAB token stays on this device.</span>{" "}
-            It is never uploaded to Receipt Rocket or Grok.
+            It is never uploaded to Receipt Rocket or Grok. Lock your phone. Use at your own risk.
           </p>
         </div>
+        <p className="text-[11px] text-zinc-600 text-center leading-snug px-2">
+          Provided as-is. You are responsible for this device and your YNAB account. The maker is not liable for unauthorized access or loss.
+        </p>
       </footer>
     </div>
   );
