@@ -10,7 +10,6 @@ type Screen = "home" | "setup" | "review" | "success";
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("home");
-  const [hasToken, setHasToken] = useState(false);
   const [checking, setChecking] = useState(true);
   const [receipt, setReceipt] = useState<ExtractedReceipt | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -20,20 +19,17 @@ export default function Home() {
 
   useEffect(() => {
     const token = getYnabToken();
-    setHasToken(!!token);
     setChecking(false);
     if (!token) setScreen("setup");
   }, []);
 
   function handleTokenComplete() {
-    setHasToken(true);
     setScreen("home");
   }
 
   function handleDisconnect() {
     if (confirm("Disconnect your YNAB account from this device?")) {
       clearYnabToken();
-      setHasToken(false);
       setScreen("setup");
     }
   }
@@ -208,7 +204,6 @@ export default function Home() {
             It is never uploaded to Receipt Rocket or Grok.
           </p>
         </div>
-        {hasToken ? null : null}
       </footer>
     </div>
   );
