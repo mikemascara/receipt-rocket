@@ -12,7 +12,7 @@ import {
   type YnabAccount,
   type YnabCategory,
 } from "@/lib/ynab";
-import { ArrowLeft, Check, Loader2, Search, X } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Loader2, Search, X } from "lucide-react";
 
 export type ExtractedReceipt = {
   merchant: string;
@@ -29,6 +29,75 @@ type Props = {
 };
 
 type SearchOption = { id: string; label: string; hint?: string };
+
+function toDateValue(raw: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDateLabel(value: string): string {
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d) return value || "Pick a date";
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function DateField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function openPicker() {
+    const el = inputRef.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
+        return;
+      }
+    } catch {
+      // fall through to click/focus
+    }
+    el.click();
+    el.focus();
+  }
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date</label>
+      <div className="relative overflow-hidden rounded-xl">
+        <button
+          type="button"
+          onClick={openPicker}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+        >
+          <span className="text-zinc-100 truncate">{formatDateLabel(value)}</span>
+          <Calendar className="w-4 h-4 text-zinc-500 shrink-0" />
+        </button>
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          onChange={(e) => {
+            if (e.target.value) onChange(e.target.value);
+          }}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          aria-label="Choose date"
+        />
+      </div>
+    </div>
+  );
+}
 
 function SearchSelect({
   label,
@@ -168,7 +237,7 @@ function SearchSelect({
 
 export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess }: Props) {
   const [merchant, setMerchant] = useState(receipt.merchant);
-  const [date, setDate] = useState(receipt.date);
+  const [date, setDate] = useState(() => toDateValue(receipt.date));
   const [amount, setAmount] = useState(receipt.total.toFixed(2));
   const [memo, setMemo] = useState("");
 
@@ -247,7 +316,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
       if (isNaN(dollars) || dollars <= 0) throw new Error("Enter a valid amount");
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        throw new Error("Date must be YYYY-MM-DD (example: 2026-08-24)");
+        throw new Error("Pick a date from the calendar");
       }
 
       await createTransaction(token, selectedBudget, {
@@ -316,18 +385,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date (YYYY-MM-DD)</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="2026-08-24"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-          />
-        </div>
+        <DateField value={date} onChange={setDate} />
 
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">Amount ($)</label>
