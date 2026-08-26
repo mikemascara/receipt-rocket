@@ -25,6 +25,10 @@ function isArchivedBudgetName(name: string): boolean {
   return /\barchived\b/i.test(name);
 }
 
+function isInternalGroup(name: string): boolean {
+  return /internal master category/i.test(name);
+}
+
 export async function fetchBudgets(token: string): Promise<YnabBudget[]> {
   const res = await fetch(`${YNAB_BASE}/budgets`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -39,7 +43,6 @@ export async function fetchBudgets(token: string): Promise<YnabBudget[]> {
     name: b.name,
   }));
 
-  // Prefer active budgets; keep archived only if nothing else exists
   const active = budgets.filter((b) => !isArchivedBudgetName(b.name));
   return active.length > 0 ? active : budgets;
 }
@@ -61,7 +64,7 @@ export async function fetchCategories(token: string, budgetId: string): Promise<
   const data = await res.json();
   const cats: YnabCategory[] = [];
   for (const group of data.data.category_groups) {
-    if (group.hidden || group.deleted) continue;
+    if (group.hidden || group.deleted || isInternalGroup(group.name)) continue;
     for (const cat of group.categories) {
       if (cat.hidden || cat.deleted) continue;
       cats.push({

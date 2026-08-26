@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getYnabToken, getBudgetId, setBudgetId } from "@/lib/storage";
 import {
   fetchBudgets,
@@ -28,7 +28,7 @@ type Props = {
   onSuccess: () => void;
 };
 
-type SearchOption = { id: string; label: string };
+type SearchOption = { id: string; label: string; hint?: string };
 
 function SearchSelect({
   label,
@@ -47,7 +47,6 @@ function SearchSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const rootRef = useRef<HTMLDivElement>(null);
 
   const selected =
     options.find((o) => o.id === value) ||
@@ -57,24 +56,25 @@ function SearchSelect({
     const q = query.trim().toLowerCase();
     const list = emptyOption ? [emptyOption, ...options] : options;
     if (!q) return list;
-    return list.filter((o) => o.label.toLowerCase().includes(q));
+    return list.filter((o) => o.label.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q));
   }, [options, query, emptyOption]);
 
   useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div>
       <label className="block text-xs font-medium text-zinc-400 mb-1.5">{label}</label>
       <button
         type="button"
         onClick={() => {
-          setOpen((v) => !v);
+          setOpen(true);
           setQuery("");
         }}
         className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
@@ -86,25 +86,40 @@ function SearchSelect({
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800">
-            <Search className="w-4 h-4 text-zinc-500 shrink-0" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type to search…"
-              className="w-full bg-transparent text-[15px] outline-none placeholder:text-zinc-600 py-1"
-            />
-            {query && (
-              <button type="button" onClick={() => setQuery("")} className="p-1 text-zinc-500">
-                <X className="w-4 h-4" />
-              </button>
-            )}
+        <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="p-2 -ml-2 rounded-full hover:bg-zinc-800"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-lg font-semibold">{label}</h2>
           </div>
-          <div className="max-h-56 overflow-y-auto">
+
+          <div className="px-4 py-3 border-b border-zinc-800">
+            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3">
+              <Search className="w-4 h-4 text-zinc-500 shrink-0" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Type to search…"
+                className="w-full bg-transparent text-[16px] outline-none placeholder:text-zinc-600"
+              />
+              {query && (
+                <button type="button" onClick={() => setQuery("")} className="p-1 text-zinc-500">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pb-8">
             {filtered.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-zinc-500">No matches</p>
+              <p className="px-5 py-6 text-sm text-zinc-500">No matches</p>
             ) : (
               filtered.map((o) => (
                 <button
@@ -115,11 +130,12 @@ function SearchSelect({
                     setOpen(false);
                     setQuery("");
                   }}
-                  className={`w-full text-left px-4 py-3 text-[15px] hover:bg-zinc-800 ${
-                    o.id === value ? "text-orange-400" : "text-zinc-100"
+                  className={`w-full text-left px-5 py-3.5 border-b border-zinc-900 ${
+                    o.id === value ? "bg-orange-500/10 text-orange-300" : "text-zinc-100"
                   }`}
                 >
-                  {o.label}
+                  <span className="block text-[15px] leading-snug">{o.label}</span>
+                  {o.hint && <span className="block text-[12px] text-zinc-500 mt-0.5">{o.hint}</span>}
                 </button>
               ))
             )}
@@ -134,7 +150,6 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
   const [merchant, setMerchant] = useState(receipt.merchant);
   const [date, setDate] = useState(receipt.date);
   const [amount, setAmount] = useState(receipt.total.toFixed(2));
-  // Start blank — user adds a note only if they want one
   const [memo, setMemo] = useState("");
 
   const [budgets, setBudgets] = useState<YnabBudget[]>([]);
@@ -240,7 +255,8 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
 
   const categoryOptions: SearchOption[] = categories.map((c) => ({
     id: c.id,
-    label: `${c.category_group_name} → ${c.name}`,
+    label: c.name,
+    hint: c.category_group_name,
   }));
 
   if (loading) {
