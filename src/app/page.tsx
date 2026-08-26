@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { getYnabToken, clearYnabToken } from "@/lib/storage";
 import TokenSetup from "@/components/TokenSetup";
 import ReviewScreen, { type ExtractedReceipt } from "@/components/ReviewScreen";
-import { Camera, Upload, Settings, Rocket, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { Camera, Upload, Settings, Rocket, CheckCircle2, Loader2, ShieldCheck, ClipboardPaste } from "lucide-react";
 
 type Screen = "home" | "setup" | "review" | "success";
 
@@ -16,11 +16,33 @@ export default function Home() {
   const [extracting, setExtracting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const extractingRef = useRef(false);
+  const screenRef = useRef<Screen>("home");
+
+  useEffect(() => {
+    extractingRef.current = extracting;
+  }, [extracting]);
+
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
 
   useEffect(() => {
     const token = getYnabToken();
     setChecking(false);
     if (!token) setScreen("setup");
+  }, []);
+
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      if (screenRef.current !== "home" || extractingRef.current) return;
+      const file = imageFromClipboardEvent(e);
+      if (!file) return;
+      e.preventDefault();
+      processImage(file);
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
   }, []);
 
   function handleTokenComplete() {
@@ -73,6 +95,26 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (file) processImage(file);
     e.target.value = "";
+  }
+
+  async function handlePasteButton() {
+    try {
+      if (navigator.clipboard && "read" in navigator.clipboard) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find((t) => t.startsWith("image/"));
+          if (!type) continue;
+          const blob = await item.getType(type);
+          const ext = type === "image/png" ? "png" : "jpg";
+          const file = new File([blob], `pasted-receipt.${ext}`, { type });
+          await processImage(file);
+          return;
+        }
+      }
+      alert("No image on the clipboard. Copy a screenshot, then tap Paste again.");
+    } catch {
+      alert("Could not read the clipboard. Copy the receipt image, then tap Paste — or use long-press Paste on this screen.");
+    }
   }
 
   if (checking) {
@@ -156,7 +198,7 @@ export default function Home() {
             </div>
             <h1 className="text-2xl font-bold mb-2 text-center">Snap a receipt</h1>
             <p className="text-zinc-400 text-center mb-10 max-w-xs">
-              Take a photo or upload one. Review the details, then send it straight to YNAB.
+              Take a photo, upload one, or paste a screenshot. Review, then send it to YNAB.
             </p>
 
             <div className="w-full space-y-3">
@@ -175,7 +217,19 @@ export default function Home() {
                 <Upload className="w-5 h-5" />
                 Upload Photo
               </button>
+
+              <button
+                onClick={handlePasteButton}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] text-zinc-100 font-medium py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
+              >
+                <ClipboardPaste className="w-5 h-5" />
+                Paste Image
+              </button>
             </div>
+
+            <p className="text-zinc-600 text-xs text-center mt-4">
+              Or paste with Cmd+V / Ctrl+V (or long-press → Paste on iPhone)
+            </p>
 
             <input
               ref={cameraRef}
@@ -210,6 +264,25 @@ export default function Home() {
       </footer>
     </div>
   );
+}
+
+function imageFromClipboardEvent(e: ClipboardEvent): File | null {
+  const items = e.clipboardData?.items;
+  if (items) {
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const blob = item.getAsFile();
+        if (blob) return blob;
+      }
+    }
+  }
+  const files = e.clipboardData?.files;
+  if (files) {
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith("image/")) return file;
+    }
+  }
+  return null;
 }
 
 function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
