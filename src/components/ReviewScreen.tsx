@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { getYnabToken, getBudgetId, setBudgetId } from "@/lib/storage";
 import {
   fetchBudgets,
@@ -47,6 +47,7 @@ function SearchSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const selected =
     options.find((o) => o.id === value) ||
@@ -59,14 +60,16 @@ function SearchSelect({
     return list.filter((o) => o.label.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q));
   }, [options, query, emptyOption]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  function focusSearch() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    try {
+      el.setSelectionRange(el.value.length, el.value.length);
+    } catch {
+      // some mobile browsers reject setSelectionRange
+    }
+  }
 
   return (
     <div>
@@ -74,8 +77,8 @@ function SearchSelect({
       <button
         type="button"
         onClick={() => {
-          setOpen(true);
           setQuery("");
+          setOpen(true);
         }}
         className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
       >
@@ -87,7 +90,7 @@ function SearchSelect({
 
       {open && (
         <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
-          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-zinc-800">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -99,25 +102,42 @@ function SearchSelect({
             <h2 className="text-lg font-semibold">{label}</h2>
           </div>
 
-          <div className="px-4 py-3 border-b border-zinc-800">
-            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3">
+          <div className="px-4 pb-3">
+            <label className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3">
               <Search className="w-4 h-4 text-zinc-500 shrink-0" />
               <input
-                autoFocus
+                ref={inputRef}
+                type="search"
+                inputMode="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onTouchEnd={focusSearch}
+                onMouseUp={focusSearch}
                 placeholder="Type to search…"
-                className="w-full bg-transparent text-[16px] outline-none placeholder:text-zinc-600"
+                className="w-full bg-transparent text-[16px] leading-6 outline-none placeholder:text-zinc-600"
+                style={{ fontSize: 16 }}
               />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="p-1 text-zinc-500">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    focusSearch();
+                  }}
+                  className="p-1 text-zinc-500"
+                >
                   <X className="w-4 h-4" />
                 </button>
               )}
-            </div>
+            </label>
           </div>
 
-          <div className="flex-1 overflow-y-auto pb-8">
+          <div className="flex-1 overflow-y-auto pb-10">
             {filtered.length === 0 ? (
               <p className="px-5 py-6 text-sm text-zinc-500">No matches</p>
             ) : (
