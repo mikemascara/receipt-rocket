@@ -12,7 +12,7 @@ import {
   type YnabAccount,
   type YnabCategory,
 } from "@/lib/ynab";
-import { ArrowLeft, Calendar, Check, Loader2, Search, X } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Loader2, Minus, Plus, Search, X } from "lucide-react";
 
 export type ExtractedReceipt = {
   merchant: string;
@@ -239,6 +239,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
   const [merchant, setMerchant] = useState(receipt.merchant);
   const [date, setDate] = useState(() => toDateValue(receipt.date));
   const [amount, setAmount] = useState(receipt.total.toFixed(2));
+  const [isDeposit, setIsDeposit] = useState(false);
   const [memo, setMemo] = useState("");
 
   const [budgets, setBudgets] = useState<YnabBudget[]>([]);
@@ -322,7 +323,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
       await createTransaction(token, selectedBudget, {
         account_id: selectedAccount,
         date,
-        amount: toMilliunits(-dollars),
+        amount: toMilliunits(isDeposit ? dollars : -dollars),
         payee_name: merchant || undefined,
         category_id: selectedCategory || undefined,
         memo: memo.trim() || undefined,
@@ -388,15 +389,31 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         <DateField value={date} onChange={setDate} />
 
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">Amount ($)</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-          />
+          <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+            Amount {isDeposit ? "(deposit)" : "(spent)"}
+          </label>
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              onClick={() => setIsDeposit((v) => !v)}
+              className={`w-14 shrink-0 rounded-xl border flex items-center justify-center ${
+                isDeposit
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                  : "bg-zinc-900 border-zinc-700 text-zinc-300"
+              }`}
+              aria-label={isDeposit ? "Deposit. Tap for expense." : "Expense. Tap for deposit."}
+            >
+              {isDeposit ? <Plus className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+            </button>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="flex-1 min-w-0 box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            />
+          </div>
         </div>
 
         <SearchSelect
@@ -463,7 +480,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
             </>
           ) : (
             <>
-              <Check className="w-5 h-5" /> Send to YNAB
+              <Check className="w-5 h-5" /> {isDeposit ? "Send deposit to YNAB" : "Send to YNAB"}
             </>
           )}
         </button>
