@@ -398,8 +398,8 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
               onClick={() => setIsDeposit((v) => !v)}
               className={`w-14 shrink-0 rounded-xl border flex items-center justify-center ${
                 isDeposit
-                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
-                  : "bg-zinc-900 border-zinc-700 text-zinc-300"
+                  ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                  : "bg-red-500/20 border-red-500/50 text-red-400"
               }`}
               aria-label={isDeposit ? "Deposit. Tap for expense." : "Expense. Tap for deposit."}
             >
@@ -435,7 +435,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
 
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-            Memo (optional — leave blank if you don&apos;t need one)
+            Memo (optional — leave blank if you don't need one)
           </label>
           <input
             value={memo}
