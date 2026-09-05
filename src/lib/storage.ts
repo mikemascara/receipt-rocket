@@ -1,5 +1,6 @@
 const TOKEN_KEY = "receipt-rocket-ynab-token";
 const BUDGET_KEY = "receipt-rocket-ynab-budget-id";
+const ACCOUNT_KEY = "receipt-rocket-ynab-account-id";
 const GMAIL_USER_KEY = "receipt-rocket-gmail-user";
 const GMAIL_PASS_KEY = "receipt-rocket-gmail-app-pass";
 
@@ -17,6 +18,7 @@ export function clearYnabToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(BUDGET_KEY);
+  localStorage.removeItem(ACCOUNT_KEY);
 }
 
 export function getBudgetId(): string | null {
@@ -27,6 +29,17 @@ export function getBudgetId(): string | null {
 export function setBudgetId(id: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(BUDGET_KEY, id);
+}
+
+export function getLastAccountId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ACCOUNT_KEY);
+}
+
+export function setLastAccountId(id: string): void {
+  if (typeof window === "undefined") return;
+  if (!id) return;
+  localStorage.setItem(ACCOUNT_KEY, id);
 }
 
 export function getGmailUser(): string | null {

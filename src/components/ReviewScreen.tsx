@@ -9,7 +9,7 @@ import {
   looksMaskedPayee,
   type ExtractedReceipt,
 } from "@/lib/receipt";
-import { getBudgetId, getYnabToken, setBudgetId } from "@/lib/storage";
+import { getBudgetId, getLastAccountId, getYnabToken, setBudgetId, setLastAccountId } from "@/lib/storage";
 import {
   createTransaction,
   daysAgoIso,
@@ -115,6 +115,12 @@ function DateField({
   );
 }
 
+function preferredAccountId(accounts: { id: string }[]): string {
+  const last = getLastAccountId();
+  if (last && accounts.some((a) => a.id === last)) return last;
+  return accounts[0]?.id || "";
+}
+
 export default function ReviewScreen({
   receipt,
   imagePreview,
@@ -187,7 +193,7 @@ export default function ReviewScreen({
               setMerchant(existingTransaction.payee_name);
             }
           } else if (accts.length) {
-            setSelectedAccount(accts[0].id);
+            setSelectedAccount(preferredAccountId(accts));
             const byId = new Map<string, YnabTransaction>();
             for (const t of [...unapproved, ...recent]) byId.set(t.id, t);
             const hit = bestMatch(receipt.total, receipt.date, receipt.merchant, Array.from(byId.values()));
@@ -267,7 +273,7 @@ export default function ReviewScreen({
       ]);
       setAccounts(accts);
       setCategories(cats);
-      if (accts.length) setSelectedAccount(accts[0].id);
+      if (accts.length) setSelectedAccount(preferredAccountId(accts));
     } catch (e: any) {
       setError(e.message);
     }
@@ -305,6 +311,7 @@ export default function ReviewScreen({
           cleared: matchedTx.cleared,
           approved: true,
         });
+        setLastAccountId(matchedTx.account_id);
         onSuccess("updated");
         return;
       }
@@ -322,6 +329,7 @@ export default function ReviewScreen({
         approved: true,
       });
 
+      setLastAccountId(selectedAccount);
       onSuccess("created");
     } catch (e: any) {
       setError(e.message || "Failed to save transaction");
@@ -459,7 +467,10 @@ export default function ReviewScreen({
             label="Account"
             options={accountOptions}
             value={selectedAccount}
-            onChange={setSelectedAccount}
+            onChange={(id) => {
+              setSelectedAccount(id);
+              setLastAccountId(id);
+            }}
             placeholder="Choose account"
           />
         )}
