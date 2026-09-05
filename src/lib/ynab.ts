@@ -21,12 +21,48 @@ export type YnabCategory = {
   deleted: boolean;
 };
 
+export type YnabTransaction = {
+  id: string;
+  date: string;
+  amount: number;
+  payee_name: string | null;
+  payee_id: string | null;
+  account_id: string;
+  account_name: string;
+  category_id: string | null;
+  category_name: string | null;
+  memo: string | null;
+  approved: boolean;
+  cleared: "cleared" | "uncleared" | "reconciled";
+  deleted: boolean;
+  transfer_account_id: string | null;
+};
+
 function isArchivedBudgetName(name: string): boolean {
   return /\barchived\b/i.test(name);
 }
 
 function isInternalGroup(name: string): boolean {
   return /internal master category/i.test(name);
+}
+
+function mapTransaction(t: any): YnabTransaction {
+  return {
+    id: t.id,
+    date: t.date,
+    amount: t.amount,
+    payee_name: t.payee_name ?? null,
+    payee_id: t.payee_id ?? null,
+    account_id: t.account_id,
+    account_name: t.account_name || "",
+    category_id: t.category_id ?? null,
+    category_name: t.category_name ?? null,
+    memo: t.memo ?? null,
+    approved: Boolean(t.approved),
+    cleared: t.cleared || "uncleared",
+    deleted: Boolean(t.deleted),
+    transfer_account_id: t.transfer_account_id ?? null,
+  };
 }
 
 export async function fetchBudgets(token: string): Promise<YnabBudget[]> {
@@ -79,6 +115,26 @@ export async function fetchCategories(token: string, budgetId: string): Promise<
   return cats;
 }
 
+export async function fetchTransactions(
+  token: string,
+  budgetId: string,
+  opts?: { sinceDate?: string; type?: "unapproved" | "uncategorized" }
+): Promise<YnabTransaction[]> {
+  const params = new URLSearchParams();
+  if (opts?.sinceDate) params.set("since_date", opts.sinceDate);
+  if (opts?.type) params.set("type", opts.type);
+  const qs = params.toString();
+  const url = `${YNAB_BASE}/budgets/${budgetId}/transactions${qs ? `?${qs}` : ""}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to load transactions (${res.status})`);
+  const data = await res.json();
+  return (data.data.transactions || [])
+    .map(mapTransaction)
+    .filter((t: YnabTransaction) => !t.deleted && !t.transfer_account_id);
+}
+
 export type CreateTransactionPayload = {
   account_id: string;
   date: string;
@@ -110,6 +166,44 @@ export async function createTransaction(
   return res.json();
 }
 
+export type UpdateTransactionPayload = {
+  account_id: string;
+  date: string;
+  amount: number;
+  payee_name?: string | null;
+  category_id?: string | null;
+  memo?: string | null;
+  cleared?: "cleared" | "uncleared" | "reconciled";
+  approved?: boolean;
+};
+
+export async function updateTransaction(
+  token: string,
+  budgetId: string,
+  transactionId: string,
+  tx: UpdateTransactionPayload
+) {
+  const res = await fetch(`${YNAB_BASE}/budgets/${budgetId}/transactions/${transactionId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ transaction: tx }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.detail || `Failed to update transaction (${res.status})`);
+  }
+  return res.json();
+}
+
 export function toMilliunits(dollars: number): number {
   return Math.round(dollars * 1000);
+}
+
+export function daysAgoIso(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
 }

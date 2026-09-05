@@ -1,34 +1,41 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { getYnabToken, getBudgetId, setBudgetId } from "@/lib/storage";
+import { useEffect, useRef, useState } from "react";
+import SearchSelect, { type SearchOption } from "@/components/SearchSelect";
+import { bestMatch } from "@/lib/match";
 import {
-  fetchBudgets,
-  fetchAccounts,
-  fetchCategories,
+  buildMemo,
+  formatYnabAmount,
+  looksMaskedPayee,
+  type ExtractedReceipt,
+} from "@/lib/receipt";
+import { getBudgetId, getYnabToken, setBudgetId } from "@/lib/storage";
+import {
   createTransaction,
+  daysAgoIso,
+  fetchAccounts,
+  fetchBudgets,
+  fetchCategories,
+  fetchTransactions,
   toMilliunits,
-  type YnabBudget,
+  updateTransaction,
   type YnabAccount,
+  type YnabBudget,
   type YnabCategory,
+  type YnabTransaction,
 } from "@/lib/ynab";
-import { ArrowLeft, Calendar, Check, Loader2, Minus, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Loader2, Minus, Plus, Sparkles } from "lucide-react";
 
-export type ExtractedReceipt = {
-  merchant: string;
-  date: string;
-  total: number;
-  memo?: string;
-};
+export type { ExtractedReceipt };
 
 type Props = {
   receipt: ExtractedReceipt;
   imagePreview?: string;
+  existingTransaction?: YnabTransaction | null;
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (mode: "updated" | "created") => void;
+  onAttachImage?: () => void;
 };
-
-type SearchOption = { id: string; label: string; hint?: string };
 
 function toDateValue(raw: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
@@ -51,13 +58,16 @@ function formatDateLabel(value: string): string {
 function DateField({
   value,
   onChange,
+  locked,
 }: {
   value: string;
   onChange: (next: string) => void;
+  locked?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   function openPicker() {
+    if (locked) return;
     const el = inputRef.current;
     if (!el) return;
     try {
@@ -75,172 +85,56 @@ function DateField({
   return (
     <div>
       <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date</label>
-      <div className="relative overflow-hidden rounded-xl">
-        <button
-          type="button"
-          onClick={openPicker}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-        >
-          <span className="text-zinc-100 truncate">{formatDateLabel(value)}</span>
-          <Calendar className="w-4 h-4 text-zinc-500 shrink-0" />
-        </button>
-        <input
-          ref={inputRef}
-          type="date"
-          value={value}
-          onChange={(e) => {
-            if (e.target.value) onChange(e.target.value);
-          }}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          aria-label="Choose date"
-        />
-      </div>
-    </div>
-  );
-}
-
-function SearchSelect({
-  label,
-  options,
-  value,
-  onChange,
-  placeholder,
-  emptyOption,
-}: {
-  label: string;
-  options: SearchOption[];
-  value: string;
-  onChange: (id: string) => void;
-  placeholder: string;
-  emptyOption?: SearchOption;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const selected =
-    options.find((o) => o.id === value) ||
-    (emptyOption && value === emptyOption.id ? emptyOption : undefined);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = emptyOption ? [emptyOption, ...options] : options;
-    if (!q) return list;
-    return list.filter((o) => o.label.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q));
-  }, [options, query, emptyOption]);
-
-  function focusSearch() {
-    const el = inputRef.current;
-    if (!el) return;
-    el.focus();
-    try {
-      el.setSelectionRange(el.value.length, el.value.length);
-    } catch {
-      // some mobile browsers reject setSelectionRange
-    }
-  }
-
-  return (
-    <div>
-      <label className="block text-xs font-medium text-zinc-400 mb-1.5">{label}</label>
-      <button
-        type="button"
-        onClick={() => {
-          setQuery("");
-          setOpen(true);
-        }}
-        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-      >
-        <span className={selected ? "text-zinc-100 truncate" : "text-zinc-500 truncate"}>
-          {selected?.label || placeholder}
-        </span>
-        <Search className="w-4 h-4 text-zinc-500 shrink-0" />
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
-          <div className="flex items-center gap-2 px-4 pt-4 pb-3">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="p-2 -ml-2 rounded-full hover:bg-zinc-800"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h2 className="text-lg font-semibold">{label}</h2>
-          </div>
-
-          <div className="px-4 pb-3">
-            <label className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3">
-              <Search className="w-4 h-4 text-zinc-500 shrink-0" />
-              <input
-                ref={inputRef}
-                type="search"
-                inputMode="search"
-                enterKeyHint="search"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onTouchEnd={focusSearch}
-                onMouseUp={focusSearch}
-                placeholder="Type to search…"
-                className="w-full bg-transparent text-[16px] leading-6 outline-none placeholder:text-zinc-600"
-                style={{ fontSize: 16 }}
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery("");
-                    focusSearch();
-                  }}
-                  className="p-1 text-zinc-500"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </label>
-          </div>
-
-          <div className="flex-1 overflow-y-auto pb-10">
-            {filtered.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-zinc-500">No matches</p>
-            ) : (
-              filtered.map((o) => (
-                <button
-                  key={o.id || "empty"}
-                  type="button"
-                  onClick={() => {
-                    onChange(o.id);
-                    setOpen(false);
-                    setQuery("");
-                  }}
-                  className={`w-full text-left px-5 py-3.5 border-b border-zinc-900 ${
-                    o.id === value ? "bg-orange-500/10 text-orange-300" : "text-zinc-100"
-                  }`}
-                >
-                  <span className="block text-[15px] leading-snug">{o.label}</span>
-                  {o.hint && <span className="block text-[12px] text-zinc-500 mt-0.5">{o.hint}</span>}
-                </button>
-              ))
-            )}
-          </div>
+      {locked ? (
+        <div className="w-full bg-zinc-900/60 border border-zinc-800 rounded-xl px-4 py-3 text-[15px] text-zinc-300">
+          {formatDateLabel(value)}
+        </div>
+      ) : (
+        <div className="relative overflow-hidden rounded-xl">
+          <button
+            type="button"
+            onClick={openPicker}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+          >
+            <span className="text-zinc-100 truncate">{formatDateLabel(value)}</span>
+            <Calendar className="w-4 h-4 text-zinc-500 shrink-0" />
+          </button>
+          <input
+            ref={inputRef}
+            type="date"
+            value={value}
+            onChange={(e) => {
+              if (e.target.value) onChange(e.target.value);
+            }}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            aria-label="Choose date"
+          />
         </div>
       )}
     </div>
   );
 }
 
-export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess }: Props) {
+export default function ReviewScreen({
+  receipt,
+  imagePreview,
+  existingTransaction,
+  onBack,
+  onSuccess,
+  onAttachImage,
+}: Props) {
+  const order = receipt.orders[0];
+  const initialMemo =
+    receipt.kind === "receipt"
+      ? ""
+      : receipt.memo ||
+        buildMemo({ orderId: order?.order_id, items: receipt.items || order?.items });
+
   const [merchant, setMerchant] = useState(receipt.merchant);
   const [date, setDate] = useState(() => toDateValue(receipt.date));
   const [amount, setAmount] = useState(receipt.total.toFixed(2));
   const [isDeposit, setIsDeposit] = useState(false);
-  const [memo, setMemo] = useState("");
+  const [memo, setMemo] = useState(initialMemo);
 
   const [budgets, setBudgets] = useState<YnabBudget[]>([]);
   const [accounts, setAccounts] = useState<YnabAccount[]>([]);
@@ -248,10 +142,16 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
   const [selectedBudget, setSelectedBudget] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [suggestedReason, setSuggestedReason] = useState("");
+
+  const [matchedTx, setMatchedTx] = useState<YnabTransaction | null>(existingTransaction || null);
+  const [forceCreate, setForceCreate] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const updating = Boolean(matchedTx) && !forceCreate;
 
   useEffect(() => {
     async function load() {
@@ -268,13 +168,35 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         if (budgetId) {
           setSelectedBudget(budgetId);
           setBudgetId(budgetId);
-          const [accts, cats] = await Promise.all([
+          const [accts, cats, unapproved, recent] = await Promise.all([
             fetchAccounts(token, budgetId),
             fetchCategories(token, budgetId),
+            fetchTransactions(token, budgetId, { type: "unapproved" }),
+            fetchTransactions(token, budgetId, { sinceDate: daysAgoIso(21) }),
           ]);
           setAccounts(accts);
           setCategories(cats);
-          if (accts.length) setSelectedAccount(accts[0].id);
+          if (existingTransaction) {
+            setSelectedAccount(existingTransaction.account_id);
+            setSelectedCategory(existingTransaction.category_id || "");
+            setDate(existingTransaction.date);
+            setAmount((Math.abs(existingTransaction.amount) / 1000).toFixed(2));
+            if (looksMaskedPayee(existingTransaction.payee_name) && receipt.merchant !== "Unknown") {
+              setMerchant(receipt.merchant);
+            } else if (existingTransaction.payee_name && looksMaskedPayee(receipt.merchant)) {
+              setMerchant(existingTransaction.payee_name);
+            }
+          } else if (accts.length) {
+            setSelectedAccount(accts[0].id);
+            const byId = new Map<string, YnabTransaction>();
+            for (const t of [...unapproved, ...recent]) byId.set(t.id, t);
+            const hit = bestMatch(receipt.total, receipt.date, receipt.merchant, Array.from(byId.values()));
+            if (hit) {
+              setMatchedTx(hit);
+              setSelectedAccount(hit.account_id);
+              setSelectedCategory(hit.category_id || "");
+            }
+          }
         }
       } catch (e: any) {
         setError(e.message || "Failed to load YNAB data");
@@ -283,7 +205,53 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
       }
     }
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const items = (receipt.items || []).map((i) => i.name).filter(Boolean);
+    if (loading || !categories.length) return;
+    if (!items.length && receipt.kind === "receipt") return;
+    if (selectedCategory && existingTransaction) return;
+
+    let cancelled = false;
+    async function suggest() {
+      try {
+        const res = await fetch("/api/suggest-category", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            categories: categories.map((c) => ({
+              id: c.id,
+              name: c.name,
+              group: c.category_group_name,
+            })),
+            jobs: [
+              {
+                merchant,
+                items,
+                memo,
+                amount: parseFloat(amount),
+              },
+            ],
+          }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const s = data.suggestions?.[0];
+        if (cancelled || !s?.category_id) return;
+        setSelectedCategory((prev) => prev || s.category_id);
+        setSuggestedReason(s.reason || "Suggested from items");
+      } catch {
+        // non-fatal
+      }
+    }
+    suggest();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, categories.length]);
 
   async function handleBudgetChange(id: string) {
     setSelectedBudget(id);
@@ -307,7 +275,7 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
 
   async function handleSubmit() {
     const token = getYnabToken();
-    if (!token || !selectedBudget || !selectedAccount) return;
+    if (!token || !selectedBudget) return;
 
     setSubmitting(true);
     setError("");
@@ -320,6 +288,29 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         throw new Error("Pick a date from the calendar");
       }
 
+      if (updating && matchedTx) {
+        const payee =
+          merchant && merchant !== "Unknown"
+            ? merchant
+            : looksMaskedPayee(matchedTx.payee_name)
+              ? merchant
+              : matchedTx.payee_name;
+        await updateTransaction(token, selectedBudget, matchedTx.id, {
+          account_id: matchedTx.account_id,
+          date: matchedTx.date,
+          amount: matchedTx.amount,
+          payee_name: payee || matchedTx.payee_name,
+          category_id: selectedCategory || matchedTx.category_id,
+          memo: memo.trim() || matchedTx.memo,
+          cleared: matchedTx.cleared,
+          approved: true,
+        });
+        onSuccess("updated");
+        return;
+      }
+
+      if (!selectedAccount) throw new Error("Choose an account");
+
       await createTransaction(token, selectedBudget, {
         account_id: selectedAccount,
         date,
@@ -331,9 +322,9 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         approved: true,
       });
 
-      onSuccess();
+      onSuccess("created");
     } catch (e: any) {
-      setError(e.message || "Failed to create transaction");
+      setError(e.message || "Failed to save transaction");
       setSubmitting(false);
     }
   }
@@ -363,10 +354,30 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
         <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-semibold">Review & Send</h1>
+        <h1 className="text-lg font-semibold">{updating ? "Categorize" : "Review & Send"}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6 space-y-5">
+        {updating && matchedTx && (
+          <div className="rounded-2xl border border-orange-500/25 bg-orange-500/10 px-4 py-3">
+            <p className="text-[13px] font-medium text-orange-200">
+              Updating the imported charge — not creating a duplicate.
+            </p>
+            <p className="text-[12px] text-zinc-400 mt-1">
+              {matchedTx.account_name} · {formatYnabAmount(matchedTx.amount)} · {matchedTx.date}
+            </p>
+            {!existingTransaction && (
+              <button
+                type="button"
+                onClick={() => setForceCreate(true)}
+                className="text-[12px] text-zinc-500 underline mt-2"
+              >
+                Create a new transaction instead
+              </button>
+            )}
+          </div>
+        )}
+
         {imagePreview && (
           <div className="rounded-xl overflow-hidden border border-zinc-800">
             <img
@@ -377,6 +388,27 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
           </div>
         )}
 
+        {onAttachImage && (
+          <button
+            type="button"
+            onClick={onAttachImage}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-[14px] text-zinc-200"
+          >
+            {imagePreview ? "Replace Amazon / receipt screenshot" : "Paste or snap Amazon order for item details"}
+          </button>
+        )}
+
+        {(receipt.items?.length || order?.items?.length) ? (
+          <div className="rounded-xl bg-zinc-900/60 border border-zinc-800 px-4 py-3">
+            <p className="text-[11px] font-medium text-zinc-500 mb-1">Items</p>
+            <p className="text-[13px] text-zinc-200 leading-snug">
+              {(receipt.items.length ? receipt.items : order?.items || [])
+                .map((i) => i.name)
+                .join(", ")}
+            </p>
+          </div>
+        ) : null}
+
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">Merchant</label>
           <input
@@ -386,66 +418,83 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
           />
         </div>
 
-        <DateField value={date} onChange={setDate} />
+        <DateField value={date} onChange={setDate} locked={updating} />
 
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-            Amount {isDeposit ? "(deposit)" : "(spent)"}
+            Amount {updating ? "(from YNAB)" : isDeposit ? "(deposit)" : "(spent)"}
           </label>
-          <div className="flex items-stretch gap-2">
-            <button
-              type="button"
-              onClick={() => setIsDeposit((v) => !v)}
-              className={`w-14 shrink-0 rounded-xl border flex items-center justify-center ${
-                isDeposit
-                  ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
-                  : "bg-red-500/20 border-red-500/50 text-red-400"
-              }`}
-              aria-label={isDeposit ? "Deposit. Tap for expense." : "Expense. Tap for deposit."}
-            >
-              {isDeposit ? <Plus className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
-            </button>
-            <input
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="flex-1 min-w-0 box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            />
-          </div>
+          {updating ? (
+            <div className="w-full bg-zinc-900/60 border border-zinc-800 rounded-xl px-4 py-3 text-[15px] text-zinc-300 tabular-nums">
+              {formatYnabAmount(matchedTx!.amount)}
+            </div>
+          ) : (
+            <div className="flex items-stretch gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeposit((v) => !v)}
+                className={`w-14 shrink-0 rounded-xl border flex items-center justify-center ${
+                  isDeposit
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                    : "bg-red-500/20 border-red-500/50 text-red-400"
+                }`}
+                aria-label={isDeposit ? "Deposit. Tap for expense." : "Expense. Tap for deposit."}
+              >
+                {isDeposit ? <Plus className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+              </button>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="flex-1 min-w-0 box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+              />
+            </div>
+          )}
         </div>
 
-        <SearchSelect
-          label="Account"
-          options={accountOptions}
-          value={selectedAccount}
-          onChange={setSelectedAccount}
-          placeholder="Choose account"
-        />
+        {!updating && (
+          <SearchSelect
+            label="Account"
+            options={accountOptions}
+            value={selectedAccount}
+            onChange={setSelectedAccount}
+            placeholder="Choose account"
+          />
+        )}
 
         <SearchSelect
           label="Category"
           options={categoryOptions}
           value={selectedCategory}
-          onChange={setSelectedCategory}
+          onChange={(id) => {
+            setSelectedCategory(id);
+            setSuggestedReason("");
+          }}
           placeholder="Choose category"
           emptyOption={{ id: "", label: "— Uncategorized —" }}
         />
+        {suggestedReason && (
+          <p className="-mt-3 text-[11px] text-orange-300/80 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            {suggestedReason}
+          </p>
+        )}
 
         <div>
           <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-            Memo (optional — leave blank if you don't need one)
+            Memo {receipt.kind === "receipt" ? "(optional)" : ""}
           </label>
           <input
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="e.g. lunch with Amy"
+            placeholder={receipt.kind === "receipt" ? "e.g. lunch with Amy" : "Order # and items"}
             className="w-full max-w-full box-border bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-orange-500/40"
           />
         </div>
 
-        {budgets.length > 1 && (
+        {budgets.length > 1 && !updating && (
           <SearchSelect
             label="Budget"
             options={budgets.map((b) => ({ id: b.id, label: b.name }))}
@@ -471,16 +520,21 @@ export default function ReviewScreen({ receipt, imagePreview, onBack, onSuccess 
       <div className="px-4 pb-6 safe-bottom">
         <button
           onClick={handleSubmit}
-          disabled={submitting || !selectedAccount}
+          disabled={submitting || (!updating && !selectedAccount)}
           className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-semibold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 text-[16px]"
         >
           {submitting ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" /> Sending…
+              <Loader2 className="w-5 h-5 animate-spin" /> Saving…
             </>
           ) : (
             <>
-              <Check className="w-5 h-5" /> {isDeposit ? "Send deposit to YNAB" : "Send to YNAB"}
+              <Check className="w-5 h-5" />{" "}
+              {updating
+                ? "Save & approve in YNAB"
+                : isDeposit
+                  ? "Send deposit to YNAB"
+                  : "Send to YNAB"}
             </>
           )}
         </button>
