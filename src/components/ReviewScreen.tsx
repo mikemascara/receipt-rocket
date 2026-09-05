@@ -7,6 +7,7 @@ import {
   buildMemo,
   formatYnabAmount,
   looksMaskedPayee,
+  nearestCalendarDate,
   type ExtractedReceipt,
 } from "@/lib/receipt";
 import { getBudgetId, getLastAccountId, getYnabToken, setBudgetId, setLastAccountId } from "@/lib/storage";
@@ -38,10 +39,15 @@ type Props = {
 };
 
 function toDateValue(raw: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return nearestCalendarDate(raw);
   const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return new Date().toISOString().slice(0, 10);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return nearestCalendarDate(`${y}-${m}-${d}`);
+  }
+  return nearestCalendarDate("");
 }
 
 function formatDateLabel(value: string): string {
@@ -152,6 +158,7 @@ export default function ReviewScreen({
 
   const [matchedTx, setMatchedTx] = useState<YnabTransaction | null>(existingTransaction || null);
   const [forceCreate, setForceCreate] = useState(false);
+  const [ynabTxs, setYnabTxs] = useState<YnabTransaction[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -182,6 +189,9 @@ export default function ReviewScreen({
           ]);
           setAccounts(accts);
           setCategories(cats);
+          const byId = new Map<string, YnabTransaction>();
+          for (const t of [...unapproved, ...recent]) byId.set(t.id, t);
+          setYnabTxs(Array.from(byId.values()));
           if (existingTransaction) {
             setSelectedAccount(existingTransaction.account_id);
             setSelectedCategory(existingTransaction.category_id || "");
@@ -194,14 +204,6 @@ export default function ReviewScreen({
             }
           } else if (accts.length) {
             setSelectedAccount(preferredAccountId(accts));
-            const byId = new Map<string, YnabTransaction>();
-            for (const t of [...unapproved, ...recent]) byId.set(t.id, t);
-            const hit = bestMatch(receipt.total, receipt.date, receipt.merchant, Array.from(byId.values()));
-            if (hit) {
-              setMatchedTx(hit);
-              setSelectedAccount(hit.account_id);
-              setSelectedCategory(hit.category_id || "");
-            }
           }
         }
       } catch (e: any) {
@@ -213,6 +215,23 @@ export default function ReviewScreen({
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (loading || existingTransaction || forceCreate || !ynabTxs.length) return;
+    const dollars = parseFloat(amount);
+    if (!Number.isFinite(dollars) || dollars <= 0) return;
+    const hit = bestMatch(dollars, date, merchant, ynabTxs);
+    if (hit) {
+      setMatchedTx(hit);
+      setSelectedAccount(hit.account_id);
+      setLastAccountId(hit.account_id);
+      if (hit.category_id) {
+        setSelectedCategory((prev) => prev || hit.category_id || "");
+      }
+    } else {
+      setMatchedTx(null);
+    }
+  }, [loading, amount, date, merchant, ynabTxs, forceCreate, existingTransaction]);
 
   useEffect(() => {
     const items = (receipt.items || []).map((i) => i.name).filter(Boolean);

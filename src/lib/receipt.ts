@@ -75,6 +75,37 @@ export function formatDollars(dollars: number): string {
   });
 }
 
+export function todayIso(): string {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, "0");
+  const d = String(n.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Prefer a date close to today when the year is missing or obviously wrong (e.g. 2024-09-05 in 2026). */
+export function nearestCalendarDate(raw: string, today = todayIso()): string {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+  if (!iso) return today;
+  const mm = iso.slice(5, 7);
+  const dd = iso.slice(8, 10);
+  const year = Number(today.slice(0, 4));
+  const candidates = [iso, `${year}-${mm}-${dd}`, `${year - 1}-${mm}-${dd}`];
+  const todayMs = Date.parse(`${today}T00:00:00`);
+  let best = today;
+  let bestDiff = Infinity;
+  for (const c of candidates) {
+    const ms = Date.parse(`${c}T00:00:00`);
+    if (Number.isNaN(ms)) continue;
+    const diff = Math.abs(ms - todayMs);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = c;
+    }
+  }
+  return best;
+}
+
 export function receiptFromTransaction(input: {
   payeeName: string | null;
   date: string;

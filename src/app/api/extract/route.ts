@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildMemo, looksLikeAmazon, type ExtractedItem, type ExtractedKind, type ExtractedOrder } from "@/lib/receipt";
+import { buildMemo, looksLikeAmazon, nearestCalendarDate, todayIso, type ExtractedItem, type ExtractedKind, type ExtractedOrder } from "@/lib/receipt";
 
 /**
  * Receipt / Amazon order extraction via Grok vision.
@@ -17,15 +17,16 @@ function asItems(raw: unknown): ExtractedItem[] {
     .filter((i) => i.name);
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function asDate(raw: unknown): string {
   const s = String(raw || "");
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return nearestCalendarDate(s);
   const parsed = new Date(s);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return nearestCalendarDate(`${y}-${m}-${d}`);
+  }
   return todayIso();
 }
 
@@ -117,7 +118,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
 Rules:
 - amounts are positive numbers (no $ sign)
-- date is ISO YYYY-MM-DD; if missing use today's date
+- Today's date is ${todayIso()}. date is ISO YYYY-MM-DD. If the year is missing or looks more than a year off, use the current year.
 - kind=order_list when the screenshot lists MORE THAN ONE charge/order
 - kind=order_detail for a single Amazon (or similar) order with line items
 - kind=receipt for a paper/store receipt

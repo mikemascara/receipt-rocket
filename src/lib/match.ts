@@ -5,7 +5,10 @@ function daysBetween(a: string, b: string): number {
   const da = Date.parse(`${a}T00:00:00`);
   const db = Date.parse(`${b}T00:00:00`);
   if (Number.isNaN(da) || Number.isNaN(db)) return 99;
-  return Math.round(Math.abs(da - db) / 86_400_000);
+  const raw = Math.round(Math.abs(da - db) / 86_400_000);
+  // Same month/day with a wrong year (OCR often guesses 2024) counts as same day.
+  if (a.slice(5, 10) === b.slice(5, 10)) return 0;
+  return raw;
 }
 
 export function matchScore(
@@ -99,11 +102,17 @@ export function bestMatch(
   minScore = 70
 ): YnabTransaction | null {
   let best: { tx: YnabTransaction; score: number } | null = null;
+  const amountHits: YnabTransaction[] = [];
   for (const tx of transactions) {
     if (tx.deleted || tx.transfer_account_id) continue;
+    const diff = Math.abs(Math.abs(tx.amount) / 1000 - amount);
+    if (diff <= 0.02 && !tx.approved) amountHits.push(tx);
     const score = matchScore(tx, amount, date, merchant);
     if (score < minScore) continue;
     if (!best || score > best.score) best = { tx, score };
   }
-  return best?.tx ?? null;
+  if (best) return best.tx;
+  // Unique unapproved amount in the loaded window — that's the imported charge.
+  if (amountHits.length === 1) return amountHits[0];
+  return null;
 }
