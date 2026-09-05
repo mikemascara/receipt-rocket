@@ -2,31 +2,30 @@
 
 Snap a receipt → review → send straight to YNAB.
 
-For Amazon (and other card imports): paste the order screenshot → match the charge already in YNAB → approve it. No duplicate transaction. Your YNAB token never leaves your device.
+For Amazon: the **Amazon** tab reads the order emails you already get, matches them to the blank imported charges in YNAB, fills in what you bought, and approves — without opening Amazon.
+
+Your YNAB token never leaves your device.
 
 ## Features
 
-- Take photo, upload, or paste a receipt
-- Grok vision extracts merchant, date, total, and (for Amazon) order numbers + items
 - Inbox of unapproved / uncategorized YNAB charges
-- Match a screenshot to imported bank transactions and update them in place
-- Suggested category from item names
-- Mandatory review before anything hits YNAB
+- **Amazon tab** — sync Gmail order emails (`Ordered: 1 Shoes item`), match by amount, write memo + category onto the existing YNAB charge
+- Paper receipts: take photo / upload / paste, then send to YNAB
+- Suggested category from item / department names
 - PWA-ready (Add to Home Screen on iPhone)
 
-## Amazon flow (the usual pain)
+## Amazon (no Amazon app)
 
-YNAB only sees `Amazon −$49.81`. Amazon’s own transaction list doesn’t name the items either.
+Amazon’s bank feed is just `Amazon −$49.81`. The confirmation email has the order number, total, and department (Shoes, Bedding, Electronics…).
 
-1. Open Receipt Rocket — unapproved YNAB charges show as “N to categorize”
-2. In Amazon, open the order (or Your Orders / gift-card activity)
-3. Screenshot it, paste into Receipt Rocket
-4. We match amounts to the imported YNAB charge, fill the memo (`#order · items`), suggest a category
-5. Save & approve — the existing YNAB transaction is updated, not duplicated
+1. Open Receipt Rocket → **Amazon**
+2. One-time: Gmail address + [App Password](https://myaccount.google.com/apppasswords)
+3. Tap **Find what I bought**
+4. Check the matches, pick a category, **Save & approve**
 
-If amounts don’t line up (gift card vs card, split charges), pick the YNAB row by hand. Still faster than bouncing between apps.
+Gift-card and Marketplace splits sometimes mean the email total ≠ the card amount. Pick the order by hand — you still see “Shoes $40.81” without opening Amazon.
 
-Paper receipts still create a new YNAB transaction, unless we find an imported charge with the same amount.
+Optional: upload Amazon’s order-history CSV if you want full product titles.
 
 ## Quick Start (Vercel)
 
@@ -44,8 +43,6 @@ npm run dev
 ```
 
 ## How users connect YNAB
-
-The app walks them through:
 
 1. Open YNAB → Account Settings → Developer Settings
 2. Create a Personal Access Token

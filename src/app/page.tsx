@@ -5,6 +5,8 @@ import InboxList from "@/components/InboxList";
 import MatchReview from "@/components/MatchReview";
 import ReviewScreen from "@/components/ReviewScreen";
 import TokenSetup from "@/components/TokenSetup";
+import AmazonScreen from "@/components/AmazonScreen";
+import AppNav, { type AppTab } from "@/components/AppNav";
 import { receiptFromTransaction, type ExtractedReceipt } from "@/lib/receipt";
 import { clearYnabToken, getBudgetId, getYnabToken, setBudgetId } from "@/lib/storage";
 import {
@@ -20,7 +22,6 @@ import {
   Loader2,
   Rocket,
   Settings,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ export default function Home() {
   const [existingTx, setExistingTx] = useState<YnabTransaction | null>(null);
   const [successMode, setSuccessMode] = useState<"updated" | "created" | "batch">("created");
   const [successCount, setSuccessCount] = useState(1);
+  const [tab, setTab] = useState<AppTab>("inbox");
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const extractingRef = useRef(false);
@@ -101,6 +103,13 @@ export default function Home() {
       for (const t of [...unapproved, ...recentUncat]) byId.set(t.id, t);
       const list = Array.from(byId.values()).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
       setInbox(list);
+      const amazonish = list.filter(
+        (t) =>
+          /\b(amazon|amzn)\b/i.test(t.payee_name || "") ||
+          !t.payee_name ||
+          /^[\s*•·.─\-]+$/.test((t.payee_name || "").trim())
+      );
+      if (amazonish.length >= 2) setTab("amazon");
     } catch {
       // Inbox is optional — snapping still works
     } finally {
@@ -338,96 +347,91 @@ export default function Home() {
         </button>
       </header>
 
-      <main className="flex-1 flex flex-col px-6 pb-8">
-            {inbox.length > 0 && (
+      <main className="flex-1 flex flex-col px-5 pb-3 overflow-y-auto">
+        {tab === "amazon" && (
+          <AmazonScreen
+            onSuccess={(count) => {
+              setSuccessMode("batch");
+              setSuccessCount(count);
+              setScreen("success");
+            }}
+          />
+        )}
+
+        {tab === "inbox" && (
+          <>
+            {inbox.length > 0 ? (
               <InboxList
                 transactions={inbox}
                 onSelect={openInboxItem}
-                onPasteAmazon={handlePasteButton}
+                onPasteAmazon={() => setTab("snap")}
                 onRefresh={loadInbox}
                 refreshing={inboxLoading}
               />
-            )}
-
-            <div className={inbox.length ? "" : "flex-1 flex flex-col items-center justify-center"}>
-              {inbox.length === 0 && (
-                <>
-                  <div className="w-24 h-24 rounded-3xl bg-orange-500/15 flex items-center justify-center mb-8 mx-auto">
-                    <Rocket className="w-12 h-12 text-orange-400" />
-                  </div>
-                  <h1 className="text-2xl font-bold mb-2 text-center">Snap or paste</h1>
-                  <p className="text-zinc-400 text-center mb-10 max-w-xs mx-auto">
-                    Paper receipt, or an Amazon order screenshot. We’ll match it to the charge already
-                    in YNAB.
-                  </p>
-                </>
-              )}
-
-              {inbox.length > 0 && (
-                <p className="text-[13px] font-medium text-zinc-500 mb-3">Or snap a paper receipt</p>
-              )}
-
-              <div className="w-full space-y-3">
-                <button
-                  onClick={() => cameraRef.current?.click()}
-                  className="w-full bg-orange-500 hover:bg-orange-400 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
-                >
-                  <Camera className="w-5 h-5" />
-                  Take Photo
-                </button>
-
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] text-zinc-100 font-medium py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
-                >
-                  <Upload className="w-5 h-5" />
-                  Upload Photo
-                </button>
-
-                <button
-                  onClick={handlePasteButton}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] text-zinc-100 font-medium py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
-                >
-                  <ClipboardPaste className="w-5 h-5" />
-                  Paste Image
-                </button>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-16">
+                <p className="text-zinc-300 font-medium">Inbox is clear</p>
+                <p className="text-zinc-500 text-sm mt-1">No unapproved YNAB charges right now.</p>
               </div>
+            )}
+          </>
+        )}
 
-              <p className="text-zinc-600 text-xs text-center mt-4">
-                Or paste with Cmd+V / Ctrl+V (or long-press → Paste on iPhone)
-              </p>
-
-              <input
-                ref={cameraRef}
-                type="file"
-                accept="image/jpeg,image/png,image/*"
-                capture="environment"
-                className="hidden"
-                onChange={onFileChange}
-              />
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/*"
-                className="hidden"
-                onChange={onFileChange}
-              />
+        {tab === "snap" && (
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="w-20 h-20 rounded-3xl bg-orange-500/15 flex items-center justify-center mb-6">
+              <Rocket className="w-10 h-10 text-orange-400" />
             </div>
+            <h1 className="text-2xl font-bold mb-2 text-center">Snap a receipt</h1>
+            <p className="text-zinc-400 text-center mb-8 max-w-xs">
+              Paper receipts still work here. Amazon charges belong on the Amazon tab — no photo needed.
+            </p>
+            <div className="w-full space-y-3">
+              <button
+                onClick={() => cameraRef.current?.click()}
+                className="w-full bg-orange-500 hover:bg-orange-400 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
+              >
+                <Camera className="w-5 h-5" />
+                Take Photo
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] text-zinc-100 font-medium py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
+              >
+                <Upload className="w-5 h-5" />
+                Upload Photo
+              </button>
+              <button
+                onClick={handlePasteButton}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] text-zinc-100 font-medium py-4 rounded-2xl flex items-center justify-center gap-3 transition-all text-[16px]"
+              >
+                <ClipboardPaste className="w-5 h-5" />
+                Paste Image
+              </button>
+            </div>
+            <p className="text-zinc-600 text-xs text-center mt-4">
+              Or paste with Cmd+V / Ctrl+V (or long-press → Paste on iPhone)
+            </p>
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/jpeg,image/png,image/*"
+              capture="environment"
+              className="hidden"
+              onChange={onFileChange}
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/*"
+              className="hidden"
+              onChange={onFileChange}
+            />
+          </div>
+        )}
       </main>
 
-      <footer className="px-5 pb-6 safe-bottom space-y-2">
-        <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-          <p className="text-[12px] text-zinc-300 leading-snug">
-            <span className="font-semibold text-emerald-300">YNAB token stays on this device.</span>{" "}
-            It is never uploaded to Receipt Rocket or Grok. Lock your phone. Use at your own risk.
-          </p>
-        </div>
-        <p className="text-[11px] text-zinc-600 text-center leading-snug px-2">
-          Provided as-is. You are responsible for this device and your YNAB account. The maker is not
-          liable for unauthorized access or loss.
-        </p>
-      </footer>
+      <AppNav tab={tab} inboxCount={inbox.length} onChange={setTab} />
     </div>
   );
 }

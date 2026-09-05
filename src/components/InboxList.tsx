@@ -63,8 +63,8 @@ export default function InboxList({
       </div>
 
       <p className="text-[13px] text-zinc-500 mb-3 leading-snug">
-        Bank imports Amazon as a blank amount. Paste the Amazon order screenshot to fill in what
-        you bought, then approve the existing charge — no duplicate.
+        Tap a charge to categorize it. Amazon charges are faster on the Amazon tab — it reads the
+        order email so you don’t have to open Amazon.
       </p>
 
       <button
@@ -73,7 +73,7 @@ export default function InboxList({
         className="w-full mb-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-100 font-medium py-3 rounded-2xl flex items-center justify-center gap-2 text-[14px]"
       >
         <ClipboardPaste className="w-4 h-4 text-orange-400" />
-        Paste Amazon screenshot
+        Paste a receipt screenshot
       </button>
 
       <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/50">
